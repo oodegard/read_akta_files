@@ -1,5 +1,7 @@
 library(reshape2)  # For melting the data into long format
 library(ggplot2)
+library(yaml)
+
 
 #csvfile = path_to_csvfile
 
@@ -44,11 +46,65 @@ aktacsvreader <- function(csvfile) {
 }
 
 
-path_to_csvfile = "C:/Users/Øyvind/OneDrive - Universitetet i Oslo/Work/03_UiO/15_instrument_data/Akta/20240923_129_S01_amCh_unconjugated Superdex 75 120 ml 500 µl injection new 001 001.csv"
-path_to_rdsfile = gsub(".csv$", ".rds", path_to_csvfile)
-dt = aktacsvreader(path_to_csvfile)
+# set working directory
+working_dir = "C:/Users/oodeg/OneDrive - Universitetet i Oslo/Work/03_UiO/15_instrument_data/Akta"
+setwd(working_dir)
 
-saveRDS(data_table, file = path_to_rdsfile)
+
+# Read files
+csvfiles = list.files(working_dir, pattern = ".csv$" )
+data_tables = lapply(csvfiles, aktacsvreader)
+names(data_tables) <- basename(csvfiles)
+
+# Make yaml file for defining plot naming
+
+yaml_file_path = "experiment_info.yaml"
+
+if(!file.exists(yaml_file_path)){
+  fill_in_text = "Please_fill_in_name_to_be_shown_in_plot"
+  yamlfile = lapply(csvfiles, function(x){
+    list(dir = dirname(x),
+         filename = basename(x),
+         plot_name = fill_in_text
+    )
+  })
+  write_yaml(yamlfile, "experiment_info.yaml")
+}
+
+
+yamlfile = read_yaml(yaml_file_path)
+
+#TODO
+# Write a break point if the user has not filled in the correct names
+
+# Save data as RDS
+# sapply(csvfiles, function(x){
+#   print(x)
+#   path_to_rdsfile = gsub(".csv$", ".rds", x)
+#   saveRDS(data_tables[basename(x)], file = path_to_rdsfile)
+# })
+
+
+# Merge table into one big data.frame
+
+df_uv = data.frame()
+
+#i =1
+for (i in 1:length(data_tables)) {
+  dt = data_tables[[i]]
+  # UV
+  uv = data.frame(volume = dt$UV$volume, uv = dt$UV$UV, name = yamlfile[[i]]$plot_name )
+  df_uv <- rbind(df_uv, uv)
+}
+
+library(plotly)
+
+# Assuming df_uv is already created
+p <- ggplot(df_uv) +
+  geom_line(aes(x = volume, y = uv, col = name))
+
+# Convert to plotly interactive plot
+ggplotly(p)
 
 # Define starting values
 dt$Fraction$volume_start = dt$Fraction$volume - dt$Injection$volume
